@@ -4,7 +4,7 @@
 
 LMS 개발 순서
 
-1.LMS 삭제-> LMS폴더 생성 -> 각종 하위디렉토리 생성
+1.LMS 삭제-> LMS폴더 생성 -> 각종 하위디렉토리 생성\
 
 2. domain에 객체 클래스 생성 -> member / score / board / item
 
