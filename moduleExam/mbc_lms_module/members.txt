@@ -1,0 +1,3 @@
+admin|None|1234|관리자|admin@mbc.com|admin|True
+professor|None|2345|교수|pro@mbc.com|professor|True
+dkd|20260001|5678|학생|stu@mbc.com|student|False
