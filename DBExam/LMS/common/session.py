@@ -14,6 +14,7 @@ import pymysql
 class Session:
 
     login_member = None
+    cart = []
 
     @staticmethod
     def get_connection(): # 데이터베이스에 연결용 코드
@@ -32,10 +33,12 @@ class Session:
     @classmethod
     def login(cls, member): #  MemberService에서 로그인시 객체를 담아놈
         cls.login_member = member
+        cls.cart = [] # 로그인 시 장바구니 비우기
 
     @classmethod
     def logout(cls):  # 로그아웃 기능 (세션에 있는 객체를 None 처리함)
         cls.login_member = None
+        cls.cart = []
 
     @classmethod
     def is_login(cls): # 로그인 상태를 확인
