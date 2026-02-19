@@ -1,0 +1,60 @@
+{% extends 'layout.html' %}
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <!-- 메인 헤더 카드 -->
+    <div class="card border-0 shadow-lg mb-5">
+
+        <div class="card-header text-white text-center"
+             style="background: linear-gradient(135deg,#0f172a,#1e3a8a,#3b82f6);">
+
+            <h2 class="fw-bold mb-0">🎓 시험 관리 시스템</h2>
+
+        </div>
+
+        <div class="card-body text-center p-5">
+
+            <h3 class="text-primary fw-bold">환영합니다!</h3>
+
+            <p class="text-muted fs-5">
+                시험전용 페이지입니다. 메뉴를 선택하세요 🙂
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+<div class="card feature-card h-100 border-0 shadow-sm text-center p-4"
+     style="min-height:180px;">
+
+<div class="row g-4">
+
+    <!-- 자유게시판 -->
+    <div class="col-md-6">
+        <a href="/board" class="text-decoration-none">
+            <div class="card feature-card h-100 border-0 shadow-sm text-center p-2">
+                <h4 class="fw-bold text-primary">💬 자유게시판</h4>
+                <p class="text-muted">동료들과 소통하고 정보를 공유하세요.</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- 성적관리 -->
+    <div class="col-md-6">
+        <a href="/score/my" class="text-decoration-none">
+            <div class="card feature-card h-100 border-0 shadow-sm text-center p-2">
+                <h4 class="fw-bold text-primary">📊 성적관리</h4>
+                <p class="text-muted">시험 결과를 확인하세요.</p>
+            </div>
+        </a>
+    </div>
+
+</div>
+</div>
+</div>
+
+{% endblock %}
+
