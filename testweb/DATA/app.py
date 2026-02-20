@@ -1,12 +1,14 @@
-import msilib
+import os
 
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, send_from_directory
 from DATA.common import Session
 from DATA.domain.Board import Board
 from DATA.domain.Score import Score
+from DATA.service import PostService
+
 app = Flask(__name__)
 app.secret_key = 'you_secret_key'
-
+# 세션을 사용하기 위해 보안키 설정 (아무 문자열이나 입력)
 
 @app.route('/login', methods=['GET','POST'])
 
@@ -173,17 +175,33 @@ def mypage_member_delete():
                 "DELETE FROM boards WHERE member_id = %s;",
                 (session['user_id'],))
 
+            # 3) 파일 게시판 첨부파일(자식) 삭제
+            cursor.execute("""
+                SELECT a.save_name
+                FROM attachments a
+                JOIN posts p ON a.post_id = p.id
+                WHERE p.member_id = %s
+            """, (user_id,))
+            files = cursor.fetchall()
+
+            for f in files:
+                file_path = os.path.join(UPLOAD_FOLDER, f["save_name"])
+                if os.path.exists(file_path):
+                    os.remove(file_path)
 
             # 3) 회원(부모) 삭제
             cursor.execute(
                 "DELETE FROM members WHERE id = %s;",
                 (session['user_id'],)
             )
+
+
             conn.commit()
             session.clear()
             return "<script>alert('회원 탈퇴 완료'); location.href='/'</script>"
     finally:
         conn.close()
+
 @ app.route('/board/my')
 def board_my():
     if 'user_id' not in session:
@@ -202,6 +220,8 @@ def board_my():
     finally:
         conn.close()
 
+############################# 회원 끝 ################################
+########################### 게시판 ###################################
 @app.route('/board/write', methods=['GET', 'POST'])
 def board_write():
     # 1. 사용자가 '글쓰기' 버튼을 눌러서 들어왔을 때 (화면 보여주기)
@@ -337,6 +357,8 @@ def board_delete(board_id):
 # 주의사항 : ROLE에 ADMIN과 MANAGER만 CUD를 제공한다.
 # 일반 사용자는 ROLE이 USER이고 자신의 성적만 볼 수 있다.
 
+########################### 게시판 끝 ##################################
+############################## 성적 ###################################
 @app.route('/score/add')
 def score_add():
     if session.get('user_role') not in ('admin', 'manager'):
@@ -362,7 +384,7 @@ def score_add():
                 if row:
                     # 기존에 만든 Score.from_db 활용
                     existing_score = Score.from_db(row)
-                    # 위쪽에 객체 로드 처리 : from LMS.domain import Board, Score
+
 
             return render_template('score_form.html',
                                    target_uid=target_uid,
@@ -493,13 +515,116 @@ def score_my():
 
     finally:
         conn.close()
+############################## 성적 끝 ###################################
+########################## 파일게시판 #####################################
 
+# 1. 단일/다중파일 업로드처리
+## 2. 서비스 패키지 이용
+## 3. /uploads라는 폴더를 사용한다 / 용량제한 16mb
+## 4. db에서 부모객체가 삭제되면 자식 객체도 삭제 되게 cascade 처리
+# 파일명 중복방지용 코드 활용
+
+UPLOAD_FOLDER = './uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+    # 폴더 생성용 코드
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+# 최대 업로드 용량 제한(16MB)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+@app.route('/filesboard/write', methods = ['GET', 'POST'])
+def filesboard_write():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        title = request.form.get('title')
+        content = request.form.get('content')
+        files = request.files.getlist('files')
+        # 파일 처리시 html에 필수 코드 : enctype = "multipart/form-data"
+
+        if PostService.save_post(session['user_id'], title, content, files):
+            return "<script>alert('게시글이 등록되었습니다.'); location.href='/filesboard';</script>"
+        else:
+            return "<script>alert('등록 실패'); history.back();</script>"
+
+    return render_template('filesboard_write.html')
+
+# 파일게시판 목록
+@app.route('/filesboard')
+def filesboard_list():
+    posts = PostService.get_posts()
+    return render_template('filesboard_list.html', posts=posts)
+
+# 파일게시판 상세 보기
+@app.route('/filesboard/view/<int:post_id>')
+def filesboard_view(post_id):
+    post, fiies = PostService.get_post_detail(post_id)
+    if not post:
+        return "<script>alert('해당 게시글이 없습니다.'); location.href='/filesboard';</script>"
+    return render_template('filesboard_view.html', post=post, fiies=fiies)
+
+# send_from_directory를 사용해 자료 다운로드 가능
+
+@app.route('/download/<path:filename>')
+def download_file(filename):
+    # render_template 웹브라우저로 보낼 파일명
+    # templates라는 폴더에서 main.html을 찾아 보냄
+    # 브라우저가 다운로드할 때 보여줄 원본 이름을 쿼리 스트링으로 받거나 DB에서 가져와야 한다.
+    origin_name = request.args.get('origin_name')
+    return send_from_directory('/uploads', filename, as_attachment=True, download_name=origin_name)
+    #   return send_from_directory('uploads/', filename)는 브라우져에서 바로 열어버림
+    #   as_attachment=True 로 하면 파일 다운로드 창을 띄움
+    #   저장할 파일명은 download_name=origin_name 로 지정
+
+@app.route('/filesboard/delete/<int:post_id>')
+def filesboard_delete(post_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+
+    # 삭제 전 작성자 확인을 위해 정보 조회
+    post, _ = PostService.get_post_detail(post_id)
+    # _은 리턴값을 사용하지 않겠다 라는 관례적인 표현 (_) 사용하지 않는 변수
+
+    if not post:
+        return "<script>alert('이미 삭제된 게시글입니다.'); location.href='/filesboard';</script>"
+
+    # 본인 확인 (또는 관리자 권한)
+    if post['member_id'] != session['user_id'] and session.get('user_role') != 'admin':
+        return "<script>alert('삭제 권한이 없습니다.'); history.back();</script>"
+
+    if PostService.delete_post(post_id):
+        return "<script>alert('성공적으로 삭제되었습니다.'); location.href='/filesboard';</script>"
+    else:
+        return "<script>alert('삭제 중 오류가 발생했습니다.'); history.back();</script>"
+
+@app.route('/filesboard/edit/<int:post_id>', methods=['GET', 'POST'])
+def filesboard_edit(post_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    if request.method == 'POST':
+        title = request.form.get('title')
+        content = request.form.get('content')
+        files = request.files.getlist('files')  # 다중 파일 가져오기
+
+        if PostService.update_post(post_id, title, content, files):
+            return f"<script>alert('수정되었습니다.'); location.href='/filesboard/view/{post_id}';</script>"
+        return "<script>alert('수정 실패'); history.back();</script>"
+
+    # GET 요청 시 기존 데이터 로드
+    post, files = PostService.get_post_detail(post_id)
+    if post['member_id'] != session['user_id']:
+        return "<script>alert('권한이 없습니다.'); history.back();</script>"
+
+    return render_template('filesboard_edit.html', post=post, files=files)
+
+#################################### 파일게시판 끝 #############################################
 
 @app.route("/") # url 생성용 코드
 def index():
     return render_template('main.html')
-    # render_template 웹브라우저로 보낼 파일명
-    # templates라는 폴더에서 main.html을 찾아 보냄
 
 if __name__ == "__main__":
 
